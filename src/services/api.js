@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "https://poweroil-backend.onrender.com/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -43,7 +43,7 @@ export const getCurrentPosition = () => {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        console.log("lat",position.coords.latitude);
+        console.log("lat", position.coords.latitude);
 
         resolve({
           latitude: position.coords.latitude,
