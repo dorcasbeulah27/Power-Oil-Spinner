@@ -1,19 +1,109 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
-const SpinWheel = ({ prizes, onSpin, spinning, disabled }) => {
+const SpinWheel = ({ prizes, onSpin, spinning, disabled, selectedPrize }) => {
   const [rotation, setRotation] = useState(0);
+  const [isWaitingForPrize, setIsWaitingForPrize] = useState(false);
 
   const handleSpin = () => {
     if (spinning || disabled) return;
-
-    // Random 5–10 full rotations + random stop angle
-    const fullRotations = (5 + Math.random() * 5) * 360;
-    const finalRotation = fullRotations + Math.random() * 360;
-
-    setRotation(rotation + finalRotation);
     onSpin();
   };
+
+  // Start continuous spinning when spinning starts (before API response)
+  useEffect(() => {
+    if (spinning && !selectedPrize) {
+      setIsWaitingForPrize(true);
+      // Start with some initial rotation
+      const initialRotation = Math.random() * 360;
+      setRotation(prevRotation => prevRotation + initialRotation);
+      
+      // Keep spinning continuously until prize is determined
+      const spinInterval = setInterval(() => {
+        setRotation(prevRotation => prevRotation + 180 + Math.random() * 180);
+      }, 100);
+
+      return () => {
+        clearInterval(spinInterval);
+      };
+    } else if (selectedPrize) {
+      // Stop waiting when prize arrives
+      setIsWaitingForPrize(false);
+    }
+  }, [spinning, selectedPrize]);
+
+  // Calculate final rotation to land on selected prize when API response arrives
+  useEffect(() => {
+    if (spinning && selectedPrize && prizes.length > 0) {
+      // Delay to ensure continuous spinning has stopped and state is stable
+      // Increased delay to ensure the spinning interval is fully cleared
+      const timer = setTimeout(() => {
+        // Find the index of the selected prize
+        const prizeIndex = prizes.findIndex(p => p.id === selectedPrize.id || p.name === selectedPrize.name);
+        
+        console.log('Prize alignment:', {
+          selectedPrizeName: selectedPrize.name,
+          selectedPrizeId: selectedPrize.id,
+          prizeIndex,
+          totalPrizes: prizes.length,
+          prizesList: prizes.map((p, i) => ({ index: i, name: p.name, id: p.id }))
+        });
+        
+        if (prizeIndex !== -1) {
+          const segmentAngle = 360 / prizes.length;
+          
+          // Calculate the center angle of the selected prize segment in the wheel's local coordinate
+          // Prize 0: center at segmentAngle/2
+          // Prize 1: center at segmentAngle + segmentAngle/2
+          // Prize i: center at i * segmentAngle + segmentAngle / 2
+          const prizeCenterAngleLocal = prizeIndex * segmentAngle + segmentAngle / 2;
+          
+          // Add multiple full rotations for visual effect (5-10 rotations)
+          const fullRotations = (5 + Math.random() * 5) * 360;
+          
+          
+          setRotation(prevRotation => {
+            // Get current rotation normalized to 0-360 range
+            const currentNormalized = ((prevRotation % 360) + 360) % 360;
+        
+            
+            // Calculate where prize center currently is after current rotation
+            const currentPrizeGlobalAngle = (prizeCenterAngleLocal + currentNormalized) % 360;
+            
+            // To bring it to 0 degrees (top/pointer), we need to rotate by:
+            // If it's at X degrees, rotate by (360 - X) to bring it to 0
+            let rotationNeeded = (360 - currentPrizeGlobalAngle) % 360;
+            
+            // Ensure we always have some rotation (at least 360 degrees if already at 0)
+            if (rotationNeeded === 0) {
+              rotationNeeded = 360;
+            }
+            
+            // Final rotation: current rotation + full rotations + rotation to align with pointer
+            const finalRotation = prevRotation + fullRotations + rotationNeeded;
+            
+            console.log('Rotation calculation:', {
+              prizeCenterAngleLocal,
+              currentNormalized,
+              currentPrizeGlobalAngle,
+              rotationNeeded,
+              fullRotations,
+              finalRotation
+            });
+            
+            return finalRotation;
+          });
+        } else {
+          console.error('Prize not found in prizes array!', {
+            selectedPrize,
+            availablePrizes: prizes.map(p => ({ id: p.id, name: p.name }))
+          });
+        }
+      }, 150);
+
+      return () => clearTimeout(timer);
+    }
+  }, [spinning, selectedPrize, prizes]);
 
   const segmentAngle = prizes.length > 0 ? 360 / prizes.length : 0;
 
@@ -47,8 +137,8 @@ const SpinWheel = ({ prizes, onSpin, spinning, disabled }) => {
 
   return (
     <div className="relative flex flex-col items-center">
-      {/* Pointer - Yellow triangular pointer at bottom (upside down) */}
-      <div className="absolute -bottom-6 z-30">
+      {/* Pointer - Yellow triangular pointer at top of wheel (pointing up) */}
+      <div className="absolute -top-6 z-30">
         <div
           style={{
             width: 0,
@@ -64,8 +154,8 @@ const SpinWheel = ({ prizes, onSpin, spinning, disabled }) => {
       <motion.div
         animate={{ rotate: rotation }}
         transition={{
-          duration: spinning ? 4 : 0,
-          ease: spinning ? [0.17, 0.67, 0.12, 0.99] : "linear",
+          duration: isWaitingForPrize ? 0.1 : (spinning && selectedPrize ? 4 : 0),
+          ease: isWaitingForPrize ? "linear" : (spinning && selectedPrize ? [0.17, 0.67, 0.12, 0.99] : "linear"),
         }}
         onClick={handleSpin}
         className="relative w-80 h-80 md:w-96 md:h-96 rounded-full overflow-hidden cursor-pointer shadow-2xl"
@@ -113,14 +203,19 @@ const SpinWheel = ({ prizes, onSpin, spinning, disabled }) => {
           }}
         />
 
-        {/* Prize Labels - Properly positioned and rotated */}
+        {/* Prize Labels - Properly positioned inside divisions */}
         {prizes.map((prize, i) => {
-          const centerAngle = i * segmentAngle + segmentAngle / 2; // ✔ correct center of slice
-
-          const radius = 32; // ✔ ideal balance (works for many slices, adjust 28–35)
-
-          const x = 50 + radius * Math.cos((centerAngle * Math.PI) / 180);
-          const y = 50 + radius * Math.sin((centerAngle * Math.PI) / 180);
+          // Calculate the center angle of this segment
+          const centerAngle = i * segmentAngle + segmentAngle / 2;
+          
+          // Position text in the middle area of each segment
+          // Using 38% radius to place text well inside the division
+          const radiusPercent = 38;
+          
+          // Calculate position (adjust for CSS coordinate system where 0deg is at top)
+          const angleRad = ((centerAngle - 90) * Math.PI) / 180;
+          const x = 50 + radiusPercent * Math.cos(angleRad);
+          const y = 50 + radiusPercent * Math.sin(angleRad);
 
           return (
             <div
@@ -131,19 +226,20 @@ const SpinWheel = ({ prizes, onSpin, spinning, disabled }) => {
                 top: `${y}%`,
                 transform: `translate(-50%, -50%) rotate(${centerAngle}deg)`,
                 transformOrigin: "center center",
-                width: "75px",
+                width: "110px",
+                maxWidth: "110px",
               }}
             >
               <div
                 style={{
-                  transform: "rotate(-25deg)", // ✔ readable tilt
-                  fontSize: "14px",
+                  fontSize: "12px",
                   fontWeight: "bold",
                   color: "white",
                   textAlign: "center",
-                  lineHeight: "14px",
+                  lineHeight: "1.4",
                   wordBreak: "break-word",
-                  textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
+                  textShadow: "2px 2px 4px rgba(0,0,0,0.9), -1px -1px 2px rgba(0,0,0,0.9)",
+                  whiteSpace: "normal",
                 }}
               >
                 {prize.name}

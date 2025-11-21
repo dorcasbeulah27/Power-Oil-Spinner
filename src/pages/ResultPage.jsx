@@ -47,8 +47,8 @@ const ResultPage = () => {
   const prize = spinResult.prize;
 
   const shareText = isWin
-    ? `I just won ${prize.name} on Power Oil Spin the Wheel! 🎉 Try your luck too!`
-    : `I just played Power Oil Spin the Wheel! Try your luck and win amazing prizes! 🎁`;
+    ? `I just won ${prize.name} on Power Oil Spin the Wheel!Try your luck too!`
+    : `I just played Power Oil Spin the Wheel! Try your luck and win amazing prizes!`;
 
   const handleShare = (platform) => {
     const url = window.location.origin;

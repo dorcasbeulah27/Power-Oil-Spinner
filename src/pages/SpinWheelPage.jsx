@@ -26,6 +26,7 @@ const SpinWheelPage = () => {
   const [prizes, setPrizes] = useState([]);
   const [eligibilityReason, setEligibilityReason] = useState(null);
   const [noPrizesAvailable, setNoPrizesAvailable] = useState(false);
+  const [selectedPrize, setSelectedPrize] = useState(null);
 
   useEffect(() => {
     if (!user || !user.phoneVerified) {
@@ -144,6 +145,7 @@ const SpinWheelPage = () => {
   const handleSpin = async () => {
     if (!eligible || spinning) return;
 
+    setSelectedPrize(null); // Reset selected prize for new spin
     setSpinning(true);
     setLoading(true);
 
@@ -179,6 +181,12 @@ const SpinWheelPage = () => {
       });
 
       if (response.data.success) {
+        // Get the selected prize from the result
+        const resultPrize = response.data.result?.prize;
+        if (resultPrize) {
+          setSelectedPrize(resultPrize);
+        }
+        
         // Save result
         updateSpinResult(response.data.result);
 
@@ -320,6 +328,7 @@ const SpinWheelPage = () => {
         onSpin={handleSpin}
         spinning={spinning}
         disabled={loading || !eligible}
+        selectedPrize={selectedPrize}
       />
 
       {/* Instructions */}
