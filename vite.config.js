@@ -1,15 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import EnvironmentPlugin from "vite-plugin-environment";
 
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 3000,
-    proxy: {
-      "/api": {
-        target: "https://poweroil-backend.onrender.com",
-        changeOrigin: true,
-      },
-    },
-  },
+  plugins: [
+    react(),
+    EnvironmentPlugin({
+      VITE_API_BASE_URL: "https://poweroil-backend.onrender.com",
+    }),
+  ],
+
 });

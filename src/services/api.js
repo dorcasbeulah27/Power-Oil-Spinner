@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://poweroil-backend.onrender.com/api";
+ `${process.env.VITE_API_BASE_URL}/api` || "https://poweroil-backend.onrender.com/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
