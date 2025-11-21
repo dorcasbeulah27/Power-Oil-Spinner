@@ -100,14 +100,9 @@ const RegistrationPage = () => {
         const fetchedLocations = response.data.locations || [];
         setLocations(fetchedLocations);
         
-        // Auto-select the nearest location (first one is usually the nearest)
-        if (fetchedLocations.length === 1) {
-          setValue("storeOutlet", String(fetchedLocations[0].id), {
-            shouldValidate: true,
-          });
-          setSelectedStoreLocation(String(fetchedLocations[0].id));
-        } else if (fetchedLocations.length > 1) {
-          // Select the nearest one (first in sorted list by distance)
+        // Auto-select the first location (nearest one, sorted by distance)
+        // Works for both single and multiple items in the array
+        if (fetchedLocations.length > 0) {
           setValue("storeOutlet", String(fetchedLocations[0].id), {
             shouldValidate: true,
           });
