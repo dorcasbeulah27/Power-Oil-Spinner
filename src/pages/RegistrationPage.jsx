@@ -7,7 +7,6 @@ import {
   FaUser,
   FaPhone,
   FaEnvelope,
-  FaMapMarkerAlt,
   FaStore,
   FaLocationArrow,
   FaInfoCircle,
@@ -21,7 +20,6 @@ const RegistrationPage = () => {
   const {
     register,
     handleSubmit,
-    watch,
     setValue,
     formState: { errors },
   } = useForm();
@@ -39,53 +37,8 @@ const RegistrationPage = () => {
   const [locationLoading, setLocationLoading] = useState(false);
   const [userCoords, setUserCoords] = useState(null);
   const [selectedStoreLocation, setSelectedStoreLocation] = useState("");
-  const [locationMethod, setLocationMethod] = useState("auto"); // 'auto' or 'manual'
   const [locationPermissionDenied, setLocationPermissionDenied] =
     useState(false);
-
-  const selectedState = watch("state");
-  const selectedCity = watch("city");
-
-  const nigerianStates = [
-    "Abia",
-    "Adamawa",
-    "Akwa Ibom",
-    "Anambra",
-    "Bauchi",
-    "Bayelsa",
-    "Benue",
-    "Borno",
-    "Cross River",
-    "Delta",
-    "Ebonyi",
-    "Edo",
-    "Ekiti",
-    "Enugu",
-    "Gombe",
-    "Imo",
-    "Jigawa",
-    "Kaduna",
-    "Kano",
-    "Katsina",
-    "Kebbi",
-    "Kogi",
-    "Kwara",
-    "Lagos",
-    "Nasarawa",
-    "Niger",
-    "Ogun",
-    "Ondo",
-    "Osun",
-    "Oyo",
-    "Plateau",
-    "Rivers",
-    "Sokoto",
-    "Taraba",
-    "Yobe",
-    "Zamfara",
-    "FCT",
-  ];
-  console.log(campaign, "andjiags");
 
   useEffect(() => {
     // Check for campaignId in URL params
@@ -100,13 +53,6 @@ const RegistrationPage = () => {
     }
     getUserLocation();
   }, [searchParams]);
-
-  useEffect(() => {
-    // Fetch locations when state or city changes in manual mode
-    if (locationMethod === "manual" && selectedState && selectedCity) {
-      fetchLocations();
-    }
-  }, [selectedState, selectedCity, locationMethod]);
 
   const fetchActiveCampaign = async (campaignId = null) => {
     try {
@@ -125,22 +71,20 @@ const RegistrationPage = () => {
       const coords = await getCurrentPosition();
       setUserCoords(coords);
       updateCoordinates(coords);
-      setLocationMethod("auto");
       setLocationPermissionDenied(false);
-      // Fetch locations immediately with auto location
+      // Fetch locations immediately with GPS coordinates
       fetchLocationsWithCoords(coords);
     } catch (error) {
       console.error("Error getting location:", error);
       setLocationPermissionDenied(true);
-      setLocationMethod("manual");
-      toast.info("Please enter your state and city to find nearby stores");
+      toast.error("Location access is required. Please enable GPS to continue.");
     }
   };
 
   const fetchLocationsWithCoords = async (coords) => {
     setLocationLoading(true);
     try {
-      // When using GPS, fetch by coordinates only (no state/city filter)
+      // Fetch by coordinates only
       const params = {
         latitude: coords.latitude,
         longitude: coords.longitude,
@@ -153,58 +97,21 @@ const RegistrationPage = () => {
 
       const response = await userAPI.getLocations(params);
       if (response.data.success) {
-        setLocations(response.data.locations);
-        if (response.data.locations.length === 1) {
-          setValue("storeOutlet", String(response.data.locations[0].id), {
+        const fetchedLocations = response.data.locations || [];
+        setLocations(fetchedLocations);
+        
+        // Auto-select the nearest location (first one is usually the nearest)
+        if (fetchedLocations.length === 1) {
+          setValue("storeOutlet", String(fetchedLocations[0].id), {
             shouldValidate: true,
           });
-          setSelectedStoreLocation(String(response.data.locations[0].id));
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching locations:", error);
-      toast.error("Failed to load locations");
-    } finally {
-      setLocationLoading(false);
-    }
-  };
-
-  const fetchLocations = async () => {
-    if (locationMethod === "manual" && (!selectedState || !selectedCity)) {
-      return;
-    }
-
-    setLocationLoading(true);
-    try {
-      const params = {
-        state: selectedState,
-        city: selectedCity,
-      };
-
-      // Add campaignId if available to filter by campaign-mapped locations
-      if (campaign?.id) {
-        params.campaignId = campaign.id;
-      }
-
-      // Only include coordinates if location is enabled (auto mode)
-      // In manual mode, we only filter by state/city
-      if (locationMethod === "auto" && userCoords) {
-        params.latitude = userCoords.latitude;
-        params.longitude = userCoords.longitude;
-      }
-
-      const response = await userAPI.getLocations(params);
-      if (response.data.success) {
-        setLocations(response.data.locations);
-        // Reset store selection when locations change
-        setValue("storeOutlet", "");
-        setSelectedStoreLocation("");
-
-        if (response.data.locations.length === 1) {
-          setValue("storeOutlet", String(response.data.locations[0].id), {
+          setSelectedStoreLocation(String(fetchedLocations[0].id));
+        } else if (fetchedLocations.length > 1) {
+          // Select the nearest one (first in sorted list by distance)
+          setValue("storeOutlet", String(fetchedLocations[0].id), {
             shouldValidate: true,
           });
-          setSelectedStoreLocation(String(response.data.locations[0].id));
+          setSelectedStoreLocation(String(fetchedLocations[0].id));
         }
       }
     } catch (error) {
@@ -221,24 +128,16 @@ const RegistrationPage = () => {
       const coords = await getCurrentPosition();
       setUserCoords(coords);
       updateCoordinates(coords);
-      setLocationMethod("auto");
       setLocationPermissionDenied(false);
       toast.success("Location detected successfully!");
       await fetchLocationsWithCoords(coords);
     } catch (error) {
       console.error("Error getting location:", error);
-      toast.error("Unable to access location. Please enter manually.");
+      toast.error("Unable to access location. Please enable GPS permissions.");
       setLocationPermissionDenied(true);
     } finally {
       setLocationLoading(false);
     }
-  };
-
-  const switchToManualMode = () => {
-    setLocationMethod("manual");
-    setLocations([]);
-    setValue("storeOutlet", "");
-    setSelectedStoreLocation("");
   };
 
   const onSubmit = async (data) => {
@@ -267,30 +166,14 @@ const RegistrationPage = () => {
         return;
       }
 
-      // Determine coordinates: use GPS if available, otherwise use store location
-      let finalCoords = userCoords;
-      if (
-        !finalCoords &&
-        selectedLocation.latitude &&
-        selectedLocation.longitude
-      ) {
-        // Use store location coordinates when GPS is disabled
-        finalCoords = {
-          latitude: parseFloat(selectedLocation.latitude),
-          longitude: parseFloat(selectedLocation.longitude),
-        };
-        // Store these coordinates in context for eligibility check
-        updateCoordinates(finalCoords);
-      }
-
-      // If still no coordinates, we can't proceed
-      if (!finalCoords) {
-        toast.error(
-          "Unable to determine location. Please enable GPS or select a store with location data."
-        );
+      // Ensure we have GPS coordinates
+      if (!userCoords) {
+        toast.error("Location access is required. Please enable GPS to continue.");
         setLoading(false);
         return;
       }
+
+      const finalCoords = userCoords;
 
       const registrationData = {
         ...data,
@@ -356,79 +239,6 @@ const RegistrationPage = () => {
     }
   };
 
-  // Helper function to check location permission status
-  const checkLocationPermission = async () => {
-    try {
-      // Check if Geolocation API is available
-      if (!navigator.geolocation) {
-        console.log("Geolocation not supported");
-        setLocationPermission({
-          locationGranted: false,
-          message: "Geolocation not supported",
-        });
-        return false;
-      }
-
-      // Try to get current position
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            // Permission granted
-            console.log(position, "Location permission: GRANTED");
-            setLocationPermission({
-              locationGranted: true,
-              message: "Permission granted",
-            });
-            resolve(true);
-          },
-          (error) => {
-            // Permission denied or other error
-            if (error.code === error.PERMISSION_DENIED) {
-              console.log("Location permission: DENIED");
-              setLocationPermission({
-                locationGranted: false,
-                message: "Permission denied",
-              });
-            } else if (error.code === error.POSITION_UNAVAILABLE) {
-              console.log("Location information is unavailable");
-              setLocationPermission({
-                locationGranted: false,
-                message: "Position unavailable",
-              });
-            } else if (error.code === error.TIMEOUT) {
-              console.log("Location request timed out");
-              setLocationPermission({
-                locationGranted: false,
-                message: "Request timed out",
-              });
-            }
-            setLocationPermission({
-              locationGranted: false,
-              message: "",
-            });
-            resolve(false);
-          }
-        );
-      });
-    } catch (error) {
-      console.error("Error checking location permission:", error);
-      return false;
-    }
-  };
-
-  // Add this useEffect to RegistrationPage
-  useEffect(() => {
-    const checkPermission = async () => {
-      const hasPermission = await checkLocationPermission();
-      if (!hasPermission) {
-        toast.warning(
-          "Please enable location access for better store recommendations"
-        );
-      }
-    };
-
-    checkPermission();
-  }, []);
 
   return (
     <div
@@ -472,55 +282,44 @@ const RegistrationPage = () => {
             <p className="text-gray-600">Fill in your details to get started</p>
           </div>
 
-          {/* Location Method Toggle */}
+          {/* Location Status */}
           <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border border-blue-200">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <FaLocationArrow className="text-brand-green" />
                 <span className="font-semibold text-gray-700">
-                  Location Method
+                  Location Status
                 </span>
               </div>
-              {locationMethod === "auto" && userCoords && (
+              {userCoords && (
                 <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
                   Active
                 </span>
               )}
             </div>
 
-            {locationMethod === "auto" && userCoords ? (
+            {userCoords ? (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">
-                  Using your current location
+                  Using your current location to find nearest store
                 </span>
-                <button
-                  type="button"
-                  onClick={switchToManualMode}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Enter Manually
-                </button>
               </div>
             ) : (
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
-                  <FaInfoCircle className="text-blue-500 mt-1 flex-shrink-0" />
+                  <FaInfoCircle className="text-red-500 mt-1 flex-shrink-0" />
                   <p className="text-sm text-gray-600">
-                    {locationPermissionDenied
-                      ? "Location access denied. Please enter your state and city below."
-                      : "Enable location for automatic store detection or enter manually."}
+                    Location access is required to continue. Please enable GPS permissions.
                   </p>
                 </div>
-                {locationPermissionDenied && (
-                  <button
-                    type="button"
-                    onClick={handleRetryLocation}
-                    disabled={locationLoading}
-                    className="w-full mt-2 px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-brand-green-dark transition-colors disabled:opacity-50 text-sm font-medium"
-                  >
-                    {locationLoading ? "Detecting..." : "Enable Auto Location"}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleRetryLocation}
+                  disabled={locationLoading}
+                  className="w-full mt-2 px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-brand-green-dark transition-colors disabled:opacity-50 text-sm font-medium"
+                >
+                  {locationLoading ? "Detecting Location..." : "Enable Location Access"}
+                </button>
               </div>
             )}
           </div>
@@ -616,51 +415,6 @@ const RegistrationPage = () => {
               )}
             </div>
 
-            {/* State and City - Always visible in manual mode */}
-            {locationMethod === "manual" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <FaMapMarkerAlt className="inline mr-2 text-red-500" />
-                    State *
-                  </label>
-                  <select
-                    {...register("state", { required: "State is required" })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-power-yellow focus:border-transparent outline-none transition bg-white"
-                  >
-                    <option value="">Select State</option>
-                    {nigerianStates.map((state) => (
-                      <option key={state} value={state}>
-                        {state}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.state && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.state.message}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    {...register("city", { required: "City is required" })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-power-yellow focus:border-transparent outline-none transition"
-                    placeholder="Enter your city"
-                  />
-                  {errors.city && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.city.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Store/Outlet */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -672,17 +426,18 @@ const RegistrationPage = () => {
                   required: "Store selection is required",
                 })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-power-yellow focus:border-transparent outline-none transition bg-white"
-                disabled={locationLoading || locations.length === 0}
+                disabled={locationLoading || !userCoords || locations.length === 0}
               >
                 <option value="">
-                  {locationLoading
-                    ? "Loading locations..."
-                    : locationMethod === "manual" &&
-                      (!selectedState || !selectedCity)
-                    ? "Please select state and city first"
+                  {!userCoords
+                    ? "Enable location access first"
+                    : locationLoading
+                    ? "Loading nearest location..."
                     : locations.length === 0
-                    ? "No locations available"
-                    : "Select Store"}
+                    ? "No locations available nearby"
+                    : locations.length === 1
+                    ? "Nearest Store (Auto-selected)"
+                    : "Select Nearest Store"}
                 </option>
                 {locations.map((location) => (
                   <option key={location.id} value={String(location.id)}>
